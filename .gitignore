@@ -50,3 +50,18 @@ nohup.out
 # Historial anterior conservado fuera del repositorio
 .git.legacy*/
 *.legacy-*/
+
+# Datos, resultados y archivos temporales
+data/
+figures/
+logs/
+output/
+numba_mi/
+nohup.out
+
+# Backups legacy
+notebooks.legacy-20260622/
+scripts.legacy-20260622/
+figures.legacy-20260622/
+src.legacy-20260622/
+numba_mi_results_vip/

@@ -11,7 +11,7 @@ from joblib import Parallel, delayed
 import glob
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-INPUT_FILE = PROJECT_ROOT / "92b37feb-aa2c-40d7-bd90-0a9b5ddb3b27.h5ad"
+INPUT_FILE = PROJECT_ROOT / "whole_taxonomy_MTG_AD.h5ad"
 OUTPUT_DIR = PROJECT_ROOT / "output"
 
 def load_scanpy(path: str) -> ad.AnnData:
