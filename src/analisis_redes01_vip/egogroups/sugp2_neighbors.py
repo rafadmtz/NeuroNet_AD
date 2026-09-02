@@ -486,6 +486,41 @@ def reappear_table(nodes):
     return df
 
  
+def degree_distribution(nodes):
+    graphs = read_graphs(nodes)
+
+    ALL_GENES_FILE = "data/gene_lists/vip/all_genes_vip_ad.txt"
+
+    colors = {"Not_AD": "#1f77b4", "Low": "#f1c40f", "Intermediate": "#e67e22", "High": "#e74c3c"}
+
+    
+    all_genes = set(open(ALL_GENES_FILE).read().splitlines())
+
+    fig, axes = plt.subplots(2, 2, figsize=(10, 8))
+    axes = axes.flatten()
+
+    for ax, group in zip(axes, GROUPS):
+        g = graphs[group]
+        degrees = dict(g.degree())
+
+        # genes medidos que no estan en la red -> grado 0
+        genes_in_graph = set(g.nodes())
+        genes_not_in_graph = all_genes - genes_in_graph
+
+        all_degrees = list(degrees.values()) + [0] * len(genes_not_in_graph)
+
+        ax.hist(all_degrees, bins=50, color=colors[group], edgecolor="black", linewidth=0.3)
+        ax.set_yscale("log")
+        ax.set_title(group)
+        ax.set_xlabel("Grado")
+        ax.set_ylabel("Número de genes (log)")
+
+    fig.suptitle(f"Distribución de grado — {nodes}")
+    plt.tight_layout()
+    plt.savefig(INDIR_EGO / "figures" / f"degree_distribution_{nodes}.png", dpi=300, bbox_inches="tight")
+    plt.show()
+
+ 
 
 if __name__ == "__main__":
     
@@ -525,15 +560,17 @@ if __name__ == "__main__":
     # plot_venn_nodes(nodes)
     # basic_network_metrics(nodes)
     
-    df = reappear_table(nodes)
+    # df = reappear_table(nodes)
 
-    summary = (
-        df.group_by(["from_group", "missing_in", "reappears_in"])
-        .agg(pl.len().alias("n_genes"))
-        .sort("reappears_in")
-    )
+    # summary = (
+    #     df.group_by(["from_group", "missing_in", "reappears_in"])
+    #     .agg(pl.len().alias("n_genes"))
+    #     .sort("reappears_in")
+    # )
 
-    pl.Config.set_tbl_rows(-1)
-    print(summary) 
+    # pl.Config.set_tbl_rows(-1)
+    # print(summary) 
+    
+    degree_distribution(nodes)
     
     #plot_subgraph_neighbors(nodes)
