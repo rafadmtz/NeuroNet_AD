@@ -1,16 +1,14 @@
-library(arrow)
 library(clusterProfiler)
 library(org.Hs.eg.db)
 
-GROUPS <- c("High", "Not_AD", "Intermediate", "Low")
+GROUPS <- c("Low", "Intermediate", "High")
 
 GENE_LIST_FILE <- "data/gene_lists/vip/all_genes_with_GO_vip_ad.txt"
 
 INDIR <- "output/red_mi_vip_completo/ego_groups"
 
-OUTDIR <- file.path(INDIR, "enrichment_GO_BP")
+OUTDIR <- file.path(INDIR, "enrichment_GO_BP_new_genes")
 dir.create(OUTDIR, recursive = TRUE, showWarnings = FALSE)
-
 
 
 # Background
@@ -21,32 +19,34 @@ background <- unique(background)
 cat("Genes en background:", length(background), "\n\n")
 
 
+# Leer tabla de genes nuevos
 
-# Enrichment por ego group
+new_genes_df <- read.csv(
+    file.path(INDIR, "new_not_reappeared_genes_SR_SUG_LUC.csv"),
+    stringsAsFactors = FALSE
+)
+
+# Parsear la columna new_genes (guardada por pandas como string tipo "['A', 'B']")
+parse_gene_list <- function(x) {
+    x <- gsub("\\[|\\]|'", "", x)
+    genes <- strsplit(x, ",\\s*")[[1]]
+    genes[genes != ""]
+}
+
+
+# Enrichment por grupo (genes nuevos)
 
 for (group in GROUPS) {
 
     cat("Grupo:", group, "\n")
 
-    # Leer red
-    df <- read_parquet(
-        file.path(
-            INDIR,
-            paste0("ego01_SR_SUG_LUC_", group, ".parquet")
-        )
+    genes <- parse_gene_list(
+        new_genes_df$new_genes[new_genes_df$group == group]
     )
 
-    # Obtener todos los nodos del ego group
-    genes <- unique(
-        c(
-            df$source,
-            df$target
-        )
-    )
+    cat("Genes nuevos en este grupo:", length(genes), "\n")
 
-    cat("Genes en el ego group:", length(genes), "\n")
-
-    # Revisar si hay genes del ego group fuera del background
+    # Revisar si hay genes fuera del background
     genes_not_background <- setdiff(
         genes,
         background
@@ -77,7 +77,6 @@ for (group in GROUPS) {
 
 
     # Resultados
-
     results <- as.data.frame(ego)
 
     cat(
@@ -93,7 +92,7 @@ for (group in GROUPS) {
         file.path(
             OUTDIR,
             paste0(
-                "GO_BP_ego01_SR_SUG_LUC_",
+                "GO_BP_new_genes_SR_SUG_LUC_",
                 group,
                 ".csv"
             )
@@ -101,6 +100,3 @@ for (group in GROUPS) {
         row.names = FALSE
     )
 }
-
-
-

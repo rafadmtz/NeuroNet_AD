@@ -39,47 +39,6 @@ def jaccard_edges(G1, G2):
     e2 = set(frozenset(e) for e in G2.edges())
     return len(e1 & e2) / len(e1 | e2)
 
-def enrichment_neighrborhood(nodes, communities=False):
-    graphs = read_graphs(nodes) 
-    df_results = []
-    
-    for group in GROUPS:
-        
-        G = graphs[group]
-        
-        try:
-            enr = gp.enrichr(
-                gene_list = list(G.nodes()),
-                gene_sets = "GO_Biological_Process_2023",
-                organism = "human",
-                cutoff = 0.05,
-            )
-            
-            df_group = enr.results.assign(
-                Comunidad=group, 
-                tamaño_comunidad=len(list(G.nodes()))
-            )
-            
-            df_results.append(df_group)
-            
-            outdir = INDIR_EGO / f"enrichment_ego01_{nodes}"
-            outdir.mkdir(parents=True, exist_ok=True)
-            
-            df_group = df_group.sort_values("Adjusted P-value")
-            df_group.to_csv(
-                outdir / f"enrichment_{nodes}_{group}_01.csv",
-                index=False
-            )
-            
-            print(f"resultados_enrichment_{nodes}_{group}_01.csv guardados")
-            
-        except Exception as e:
-            print(
-                f"[{group}] comunidad {nodes} "
-                f"(n={len(list(G.nodes()))} genes) falló: {e}"
-            )
-
-
 def subgraph_neighbors(nodes, group):
     graphs = read_graphs(nodes)
     G = graphs[group]
@@ -221,9 +180,9 @@ def heatmap_jaccard():
         cbar_kws={"label": "Jaccard index"}
     )
     
-    plt.title("Jaccard index between disease stages")
+    plt.title("Jaccard index of nodes between disease stages")
     plt.tight_layout()
-    plt.savefig(INDIR_EGO / f"jaccard_nodes_heatmap_{nodes}.png", dpi=300)
+    plt.savefig(INDIR_EGO / "figures" /f"jaccard_nodes_heatmap_{nodes}.png", dpi=300)
     plt.show()
     plt.close()
    
@@ -240,7 +199,7 @@ def heatmap_jaccard():
         cbar_kws={"label": "Jaccard index"}
     )
     
-    plt.title("Jaccard index between disease stages")
+    plt.title("Jaccard index of edges between disease stages")
     plt.tight_layout()
     plt.savefig(INDIR_EGO / f"jaccard_edges_heatmap_{nodes}.png", dpi=300)
     plt.show()
@@ -442,6 +401,92 @@ def plot_venn_nodes(nodes):
     plt.savefig(INDIR_EGO / f"venn_{nodes}_nodes.png", dpi=300, bbox_inches="tight")
     plt.close()
     
+def plot_subgraph_neighbors(nodes):
+    
+    graphs=read_graphs(nodes)
+    
+    colors = {
+            "Not_AD": "#00FF7B",     # morado
+            "Low": "#3B82F6",       # azul
+            "Intermediate": "#F5A029",  # naranja
+            "High": "#EF4444",      # rojo
+        }
+    
+    fig, axes = plt.subplots(2, 2, figsize=(16, 16))
+    axes = axes.flatten()
+
+    for ax, group in zip(axes, GROUPS):
+        G = graphs[group]  # tu grafo completo ya construido
+
+        # Layout: spring_layout separa el componente gigante de las islas
+        # k controla la separación entre nodos; con redes de ~1000 nodos, k pequeño ayuda
+        pos = nx.spring_layout(G, k=0.25, iterations=100, seed=42)
+
+
+        degrees = dict(G.degree())
+        node_sizes = [6 + degrees[n] * 0.6 for n in G.nodes()]
+        # Tamaño de nodo proporcional al degree, para resaltar hubs
+
+        nx.draw_networkx_nodes(
+            G, pos, ax=ax,
+            node_size=node_sizes,
+            node_color=colors[group],
+            alpha=0.85,
+            linewidths=0.2,
+            edgecolors="black",
+        )
+
+        nx.draw_networkx_edges(
+            G, pos, ax=ax,
+            alpha=0.10,
+            width=0.8,
+            edge_color="black",
+        )
+
+        ax.set_title(
+            f"{group}\n({G.number_of_nodes()} nodes, {G.number_of_edges()} edges)",
+            fontsize=14, fontweight="bold"
+        )
+        ax.axis("off")
+
+    plt.suptitle(f"Network architecture across AD severity groups {nodes}", fontsize=18, y=0.98)
+    plt.tight_layout()
+    plt.savefig(INDIR_EGO / "figures" / f"network_architecture_{nodes}.png", dpi=300, bbox_inches="tight")
+    plt.close()
+    
+def reappear_table(nodes):
+    graphs = read_graphs(nodes)
+    node_sets = {group: set(graphs[group].nodes()) for group in GROUPS}
+    all_genes = set().union(*node_sets.values())
+
+    rows = []
+    for gene in all_genes:
+        presence = [gene in node_sets[group] for group in GROUPS]
+
+        i = 0
+        while i < len(GROUPS):
+            if not presence[i]:
+                start = i
+                while i < len(GROUPS) and not presence[i]:
+                    i += 1
+                end = i  # primer indice donde vuelve a estar presente (o len si nunca vuelve)
+
+                if start > 0 and end < len(GROUPS):
+                    rows.append({
+                        "gene": gene,
+                        "from_group": GROUPS[start - 1],
+                        "missing_in": ", ".join(GROUPS[start:end]),
+                        "reappears_in": GROUPS[end]
+                    })
+            else:
+                i += 1
+
+    df = pl.DataFrame(rows)
+    print("Reappearing genes:", df.height)
+    return df
+
+ 
+
 if __name__ == "__main__":
     
     
@@ -471,16 +516,24 @@ if __name__ == "__main__":
     if infomap_com:
         infomap_communities(nodes)
         
-    enrich=1
-    if enrich:
-        enrichment_neighrborhood(nodes)
-        
     #jaccard_analysis(nodes)
     
-    jaccard_heatmap=0
-    if jaccard_heatmap:
-        heatmap_jaccard()
+
+    #heatmap_jaccard()
     
     #overlap_analysis(nodes)
     # plot_venn_nodes(nodes)
     # basic_network_metrics(nodes)
+    
+    df = reappear_table(nodes)
+
+    summary = (
+        df.group_by(["from_group", "missing_in", "reappears_in"])
+        .agg(pl.len().alias("n_genes"))
+        .sort("reappears_in")
+    )
+
+    pl.Config.set_tbl_rows(-1)
+    print(summary) 
+    
+    #plot_subgraph_neighbors(nodes)
