@@ -1,8 +1,10 @@
 import polars as pl
 import pandas as pd
+import numpy as np
 from pathlib import Path
-from numba_mi import pipeline
+#from numba_mi import pipeline
 from datetime import datetime
+
 
 GROUPS=["Not_AD", "Low", "Intermediate", "High"]
 
@@ -47,6 +49,39 @@ def calculo_mi_numba():
         print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]")
         print(f"Guardado MI para grupo: {group} en {OUTDIR_MI / f'Vip_{group}_protein_coding_mi.parquet'}")
         
+def get_edgelist():
+
+    OUTDIR_edgelist = OUTDIR_MI / "edgelist"
+    OUTDIR_edgelist.mkdir(parents=True, exist_ok=True)
+
+    for group in GROUPS:
+        path = OUTDIR_MI / f'Vip_{group}_protein_coding_mi.parquet'
+        adj = pl.read_parquet(path)
+
+        first_col = adj.columns[0]          # nombre de la columna que trae los labels de fila
+        node_names = adj.columns[1:]        # el resto son los nombres de nodo (columnas)
+        n = len(node_names)
+
+        col_idx = pl.DataFrame({"target": node_names, "_col_idx": np.arange(n)})
+
+        edgelist = (
+            adj
+            .rename({first_col: "source"})
+            .with_columns(pl.arange(0, n).alias("_row_idx"))
+            .unpivot(index=["source", "_row_idx"], on=node_names, variable_name="target", value_name="weight")
+            .join(col_idx, on="target")
+            .filter(pl.col("_col_idx") > pl.col("_row_idx"))  # triu, k=1 (sin diagonal)
+            .select(["source", "target", "weight"])
+        )
+
+        edgelist.write_parquet(OUTDIR_edgelist / f'Vip_{group}_protein_coding_edgelist.parquet')
+        print(f"{group}: {edgelist.height} aristas guardadas")
+
+def genes_num():
+    for group in GROUPS:
+        path = OUTDIR_MI / f'Vip_{group}_protein_coding_mi.parquet'
+        adj = pl.read_parquet(path)
+        print(group, adj.width - 1, adj.height)  # -1 por la columna de labels
+
 if __name__ == "__main__":
-    write_p_coding_tsv()
-    calculo_mi_numba()
+    genes_num()
