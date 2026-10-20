@@ -104,7 +104,7 @@ resumen_jaccard_comunidades <- function(matrices, umbral = 0.5){
     return(resumen)
 }
 
-function(){
+main <- function(){
 
     m_redes <- matriz_jaccard_funcional_red()
     write.csv(m_redes, file.path(INDIR, "jaccard_funcional_redes.csv"))
